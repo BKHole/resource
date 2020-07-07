@@ -12,7 +12,7 @@
 
 - OS：CentOS Linux release 8.2.2004 
 - docker：19.03.12
-- node：v14.5.0
+- node：14.5.0
 - git：2.18.4
 
 云服务器如果没有安装以下环境，需要安装。
@@ -93,7 +93,7 @@ github 的 webhook 会在当前仓库触发某些事件时，发送一个 post �
 
 ### 创建Dockfile
 
-Dockerfile内容如下,放到服务器根目录（/root/Dockerfile）
+在这里，将拉取的项目存放在app目录下，Dockerfile内容如下，放到服务器根目录（/root/Dockerfile）
 
 ```
 FROM nginx
@@ -152,7 +152,7 @@ http.createServer(async (req, res) => {
         })
         
         // 创建 docker 镜像
-        execSync(`docker build . -t ${data.repository.name}-image:latest `, {
+        execSync(`docker build . -t ${data.repository.name}-image:latest`, {
             stdio: 'inherit',
         })
 
@@ -175,8 +175,32 @@ http.createServer(async (req, res) => {
 
 ```
 
-### 运行node脚本
+解析，
 
+**创建docker镜像**
+
+```
+docker build . -t docsify-image:latest 
+```
+
+- build：创建 docker 镜像
+- .：使用当前目录下的 Dockerfile 文件，这里在根目录（/root/)执行
+- -t：使用 tag 标记版本
+- docsify-image:latest：创建名为 docsify-image 的镜像，并标记为 latest（最新）版本
+
+**创建docker容器**
+
+```
+docker run -d -p 88:80 --name docsify-container docsify-image:latest
+```
+
+- run：创建并运行 docker 容器
+- -d： 后台运行容器
+88:80：将当前服务器的 88 端口（冒号前的 88），映射到容器的 80 端口（冒号后的 80）
+- --name：给容器命名，便于之后定位容器
+- docsify-image:latest：基于 docsify-image 最新版本的镜像创建容器
+
+### 运行node脚本
 
 ```
 pm2 start index.js
@@ -210,6 +234,10 @@ docker run -d -p 80:80 -v /var/run/docker.sock:/tmp/docker.sock:ro jwilder/nginx
 ```
 docker run -e VIRTUAL_HOST=libotao.nofoo.cn docsify-image
 ```
+
+这里创建容器省略了容器名，
+
+- -e：设置环境变量
 
 这时，域名已经配置好了，访问[http://libotao.nofoo.cn](http://libotao.nofoo.cn)可以看到效果。
 
@@ -293,7 +321,10 @@ pm2 restart index.js
 
 配置完成后，以后每次提交github，都会自动更新，访问域名就会看到最新的内容。
 
+![](https://cdn.jsdelivr.net/gh/BKHole/resource@latest/2020/image/20200707160021.png)
+
+> note：本文中使用的端口号都需要在云服务器平台创建安全组策略，放开端口
+
 ## 参考
 
 [docker + webhook 从零实现前端自动化部署](https://juejin.im/post/5ef4c7eff265da230b52dfc5)
-
