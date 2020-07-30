@@ -12,7 +12,7 @@
 
 - OS：CentOS Linux release 8.2.2004 
 - docker：19.03.12
-- node：v14.5.0
+- node：14.5.0
 - git：2.18.4
 
 云服务器如果没有安装以下环境，需要安装。
@@ -93,7 +93,7 @@ github 的 webhook 会在当前仓库触发某些事件时，发送一个 post �
 
 ### 创建Dockfile
 
-Dockerfile内容如下,放到服务器根目录（/root/Dockerfile）
+在这里，将拉取的项目存放在app目录下，Dockerfile内容如下，放到服务器根目录（/root/Dockerfile）
 
 ```
 FROM nginx
@@ -152,7 +152,7 @@ http.createServer(async (req, res) => {
         })
         
         // 创建 docker 镜像
-        execSync(`docker build . -t ${data.repository.name}-image:latest `, {
+        execSync(`docker build . -t ${data.repository.name}-image:latest`, {
             stdio: 'inherit',
         })
 
@@ -175,8 +175,33 @@ http.createServer(async (req, res) => {
 
 ```
 
-### 运行node脚本
+解析，
 
+**创建docker镜像**
+
+```
+docker build . -t docsify-image:latest 
+```
+
+- build：创建 docker 镜像
+- .：使用当前目录下的 Dockerfile 文件，这里在根目录（/root/)执行
+- -t：使用 tag 标记版本
+- docsify-image:latest：创建名为 docsify-image 的镜像，并标记为 latest（最新）版本
+
+**创建docker容器**
+
+```
+docker run -d -p 88:80 --name docsify-container docsify-image:latest
+```
+
+- run：创建并运行 docker 容器
+- -d： 后台运行容器
+- -p：端口指令
+- 88:80：冒号前，本地/服务器端口，冒号后，容器端口；这里意思是将当前服务器的 88 端口，映射到容器的 80 端口
+- --name：给容器命名，便于之后定位容器，命名可选
+- docsify-image:latest：基于 docsify-image 最新版本的镜像创建容器
+
+### 运行node脚本
 
 ```
 pm2 start index.js
@@ -202,7 +227,7 @@ pm2 logs
 这里为了方便控制，使用[nginx-proxy](https://github.com/nginx-proxy/nginx-proxy)镜像来操作，如下操作docker会自动去镜像仓库拉取，建议服务器80端口给nginx使用，方便以后增加域名和访问端口监听。
 
 ```
-docker run -d -p 80:80 -v /var/run/docker.sock:/tmp/docker.sock:ro jwilder/nginx-proxy
+docker run --name nginx-proxy -d -p 80:80 -v /var/run/docker.sock:/tmp/docker.sock:ro jwilder/nginx-proxy
 ```
 
 然后绑定域名到新建容器，这里使用我的二级域名。
@@ -210,6 +235,10 @@ docker run -d -p 80:80 -v /var/run/docker.sock:/tmp/docker.sock:ro jwilder/nginx
 ```
 docker run -e VIRTUAL_HOST=libotao.nofoo.cn docsify-image
 ```
+
+这里创建容器省略了容器名，
+
+- -e：设置环境变量
 
 这时，域名已经配置好了，访问[http://libotao.nofoo.cn](http://libotao.nofoo.cn)可以看到效果。
 
@@ -292,6 +321,55 @@ pm2 restart index.js
 ```
 
 配置完成后，以后每次提交github，都会自动更新，访问域名就会看到最新的内容。
+
+![](https://cdn.jsdelivr.net/gh/BKHole/resource@latest/2020/image/20200707160021.png)
+
+> note：本文中使用的端口号都需要在云服务器平台创建安全组策略，放开端口
+
+## https
+
+- 使用 Letsencrypt 证书加密
+
+letsencrypt-nginx-proxy-companion 是一个轻量级的代理容器，配合 nginx-proxy实现自动创建和自动更新 Let's Encrypt 证书。
+
+- 下载镜像
+
+```
+docker pull jrcs/letsencrypt-nginx-proxy-companion
+```
+
+- 启动 nginx-proxy
+
+启动前，需要先将上面创建的nginx-proxy容器删掉，
+
+```
+docker rm nginx-proxy
+```
+
+然后创建新的nginx-proxy容器。
+
+```
+docker run -d -p 80:80 -p 443:443 \
+  --name nginx-proxy \
+  -v /path/to/certs:/etc/nginx/certs:ro \
+  -v /etc/nginx/vhost.d \
+  -v /usr/share/nginx/html \
+  -v /var/run/docker.sock:/tmp/docker.sock:ro \
+  --label com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy \
+  jwilder/nginx-proxy
+```
+
+- 启动需要被代理和加密的容器
+
+```
+docker run --name docsify-container -e VIRTUAL_HOST=libotao.nofoo.cn -e LETSENCRYPT_HOST=libotao.nofoo.cn -e LETSENCRYPT_EMAIL=abc@qq.com docsify-image:latest
+```
+
+设置环境变量 LETSENCRYPT_HOST LETSENCRYPT_EMAIL自动创建和更新证书，根据自己的域名和邮箱设置。当然为了实现自动化部署，脚本文件中最后一步创建容器的命令需要被上面命令替换，然后重启index脚本就ok啦，[https://libotao.nofoo.cn](https://libotao.nofoo.cn/)。
+
+## 总结
+
+通过以上内容实现了前端项目docsify自动化部署+https访问，了解docker管理多个服务，如何通过docker使用nginx。其实部署文档类项目用GitHub Page已经足够了，这里是为了研究学习自动化部署以及docker应用。
 
 ## 参考
 
